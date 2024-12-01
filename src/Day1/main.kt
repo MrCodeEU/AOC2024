@@ -3,7 +3,7 @@ package Day1
 import java.io.File
 import kotlin.math.abs
 
-var realInput = true;
+var realInput = true
 
 fun main() {
     var fileName = "input.txt"
