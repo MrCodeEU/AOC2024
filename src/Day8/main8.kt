@@ -2,7 +2,7 @@ package Day8
 
 import java.io.File
 
-const val realInput = true
+val realInput = true
 
 fun main() {
     val fileName = if (realInput) "input.txt" else "sample.txt"
