@@ -3,7 +3,7 @@ package Day7
 import java.io.File
 import kotlin.math.pow
 
-const val realInput = true
+const val realInput = false
 
 fun main() {
     val fileName = if (realInput) "input.txt" else "sample.txt"
@@ -18,16 +18,92 @@ fun main() {
     }
 
     var part1Sum = 0L
-    var part2Sum = 0L
 
-    // Part 1
-    part1Sum = calculateAllPossibleValues(equations, 2)
+    equations.forEach { (targetSum, values) ->
+        val numberOfOperators = values.size - 1
+
+        // Generate all possible operator combinations (0 = +, 1 = *)
+        for (i in 0 until 2.0.pow(numberOfOperators).toInt()) {
+            val operators = intToBinaryString(i, numberOfOperators)
+            var result = values[0].toLong()
+
+            // Evaluate left-to-right
+            for (j in 0 until numberOfOperators) {
+                when (operators[j]) {
+                    '0' -> result += values[j + 1]
+                    '1' -> result *= values[j + 1]
+                }
+            }
+
+            if (result == targetSum) {
+                part1Sum += targetSum
+                // Debug output
+                val debugStr = buildString {
+                    append(values[0])
+                    for (j in 0 until numberOfOperators) {
+                        append(if (operators[j] == '0') " + " else " * ")
+                        append(values[j + 1])
+                    }
+                    append(" = ")
+                    append(result)
+                }
+                println("Found valid equation: $debugStr")
+                break
+            }
+        }
+    }
 
     println("Part 1:")
     println("Sum: $part1Sum")
 
     // Part 2
-    part2Sum = calculateAllPossibleValues(equations, 3)
+    var part2Sum = 0L
+
+    equations.forEach { (targetSum, values) ->
+        val numberOfOperators = values.size - 1
+
+        // Generate all possible operator combinations (0 = +, 1 = *)
+        for (i in 0 until 3.0.pow(numberOfOperators).toInt()) {
+            val operators = intToBase3String(i, numberOfOperators)
+            var result = values[0].toLong()
+
+            // first generate a new list of values with the concatenation where operand is 2 (concat meaning string concatenation)
+            val newValues = mutableListOf<Int>()
+            val newOperators = operators.toCharArray().filter { it != '2' }.toMutableList()
+
+            for (j in 0 until values.size) {
+                if (j < numberOfOperators && operators[j] == '2') {
+                    newValues.add("${values[j]}${values[j + 1]}".toInt())
+                } else {
+                    newValues.add(values[j])
+                }
+            }
+
+                    // Evaluate left-to-right with new values and operators
+            for (j in 0 until newOperators.size-1) {
+                when (newOperators[j]) {
+                    '0' -> result += newValues[j + 1]
+                    '1' -> result *= newValues[j + 1]
+                }
+            }
+
+            if (result == targetSum) {
+                part2Sum += targetSum
+                // Debug output
+                val debugStr = buildString {
+                    append(values[0])
+                    for (j in 0 until numberOfOperators) {
+                        append(if (operators[j] == '0') " + " else " * ")
+                        append(values[j + 1])
+                    }
+                    append(" = ")
+                    append(result)
+                }
+                println("Found valid equation: $debugStr")
+                break
+            }
+        }
+    }
 
     println("Part 2:")
     println("Sum: $part2Sum")
@@ -39,49 +115,4 @@ fun intToBase3String(int: Int, numberOfBits: Int): String {
 
 fun intToBinaryString(int: Int, numberOfBits: Int): String {
     return int.toString(2).padStart(numberOfBits, '0')
-}
-
-fun calculateAllPossibleValues(equations: MutableList<Pair<Long, List<Int>>>, numberOfDifferentOperators: Int): Long {
-    var sum = 0L
-    equations.forEach { (targetSum, values) ->
-        val numberOfOperators = values.size - 1
-
-        // Generate all possible operator combinations (0 = +, 1 = *)
-        for (i in 0 until numberOfDifferentOperators.toFloat().pow(numberOfOperators).toInt()) {
-            val operators = when (numberOfDifferentOperators) {
-                2 -> intToBinaryString(i, numberOfOperators)
-                3 -> intToBase3String(i, numberOfOperators)
-                else -> throw IllegalArgumentException("Unsupported number of operators: $numberOfOperators")
-            }
-            var result = values[0].toLong()
-
-            // Evaluate left-to-right
-            for (j in 0 until numberOfOperators) {
-                when (operators[j]) {
-                    '0' -> result += values[j + 1]
-                    '1' -> result *= values[j + 1]
-                    '2' -> {
-                        result = "${result}${values[j + 1]}".toLong()
-                    }
-                }
-            }
-
-            if (result == targetSum) {
-                sum += targetSum
-                // Debug output
-                val debugStr = buildString {
-                    append(values[0])
-                    for (j in 0 until numberOfOperators) {
-                        append(if (operators[j] == '0') " + " else if (operators[j] == '1') " * " else " || ")
-                        append(values[j + 1])
-                    }
-                    append(" = ")
-                    append(result)
-                }
-                println("Found valid equation: $debugStr")
-                break
-            }
-        }
-    }
-    return sum
 }
