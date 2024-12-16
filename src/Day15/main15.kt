@@ -57,7 +57,7 @@ fun main() {
                 '>' -> canPushBoxes(grid, robot, 0, 1)
                 else -> false
             }
-            
+
             if (canPush) {
                 when (move) {
                     '^' -> pushBoxes(grid, robot.second, robot.first, -1, 0)
@@ -88,13 +88,13 @@ fun canPushBoxes(grid: List<List<Char>>, start: Pair<Int, Int>, dy: Int, dx: Int
     var y = start.second + dy
     var x = start.first + dx
     var boxCount = 0
-    
+
     while (grid[y][x] == 'O') {
         boxCount++
         y += dy
         x += dx
     }
-    
+
     return grid[y][x] == '.'
 }
 
@@ -102,24 +102,24 @@ fun pushBoxes(grid: MutableList<MutableList<Char>>, startY: Int, startX: Int, dy
     var y = startY + dy
     var x = startX + dx
     val boxes = mutableListOf<Pair<Int, Int>>()
-    
+
     while (grid[y][x] == 'O') {
         boxes.add(Pair(y, x))
         y += dy
         x += dx
     }
-    
+
     for (box in boxes) {
         grid[box.first][box.second] = '.'
     }
-    
+
     y = startY + dy
     x = startX + dx
     for (i in boxes.indices) {
         y += dy
         x += dx
     }
-    
+
     for (box in boxes) {
         grid[y][x] = 'O'
         y -= dy
