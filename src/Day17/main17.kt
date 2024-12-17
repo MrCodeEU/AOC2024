@@ -1,178 +1,137 @@
-package Day16
+package Day17
 
+import kotlinx.coroutines.*
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
-val realInput = false
+val realInput = true
 
 fun main() {
     val fileName = if (realInput) "input.txt" else "sample.txt"
-    val input = File("src/Day16/$fileName").readLines()
-    // Idea: recursive through whole maze. Bounds check (if next move would be # than skip)
-    // TO get the best path we need to memorize the direction we were going before
-    // rotation lef tor right adds 1000 score to the current path.
-    // Also, no going backwards (visited) and no going to the same point twice
-    // after all directions are checked we take the one with the lowest path
-    // and return that path + its score
-    // find all paths with their score and use the one with the lowest score
-    val grid = mutableListOf<MutableList<Char>>()
-    // create maze as grid
-    input.forEach { row ->
-        grid.add(row.toMutableList())
+    val input = File("src/Day17/$fileName").readLines()
+    var registerA = input[0].split(" ")[2].toInt()
+    var registerB = input[1].split(" ")[2].toInt()
+    var registerC = input[2].split(" ")[2].toInt()
+    val program = input[4].split(" ")[1].split(",").map { it.toInt() }
+
+    // Part 1
+    val output = runProgram(program, registerA, registerB, registerC)
+    println("Part 1: ${output.joinToString(", ")}")
+
+    // Part 2
+    // run program from Register A = 0 until we get the output that's content is equal to the content of the program
+
+    runBlocking {
+        val found = AtomicBoolean(false)
+        val result = AtomicInteger(0)
+        val targetOutput = program.joinToString(",")
+        
+        // Use number of CPU cores for parallelization
+        val numberOfJobs = Runtime.getRuntime().availableProcessors()*2-1
+        val batchSize = 1000 // Smaller batch size for more frequent yields
+        
+        coroutineScope {
+            for (jobId in 0 until numberOfJobs) {
+                launch {
+                    var a = jobId
+                    while (!found.get()) { // Add upper bound of 10000
+                        if (a % batchSize == 0) {
+                            yield() // Allow other coroutines to run
+                            if (a % 100_000 == 0) { // Print less frequently
+                                println("Job $jobId trying A = $a")
+                            }
+                        }
+                        
+                        val output2 = runProgram(program, a, registerB, registerC)
+                        if (output2.joinToString(",") == targetOutput) {
+                            found.set(true)
+                            result.set(a)
+                            return@launch
+                        }
+                        a += numberOfJobs
+                    }
+                }
+            }
+        }
+        
+        println("Part 2: ${result.get()}")
     }
 
-    // find the starting point
-    var start = Pair(0, 0)
-    grid.forEach { row ->
-        row.forEach {
-            if (it == 'S') {
-                start = Pair(row.indexOf(it), grid.indexOf(row))
-                grid[start.second][start.first] = '.'
+}
+
+private fun runProgram(
+    program: List<Int>,
+    registerA: Int,
+    registerB: Int,
+    registerC: Int
+): List<Int> {
+    var registerA1 = registerA
+    var registerB1 = registerB
+    var registerC1 = registerC
+    var instructionPointer = 0
+    val output = mutableListOf<Int>()
+
+    while (instructionPointer < program.size) {
+        val literalOperand = program[instructionPointer + 1]  // operand is always at next position
+        val comboOperand = when (program[instructionPointer + 1]) {
+            0, 1, 2, 3 -> program[instructionPointer + 1]
+            4 -> registerA1
+            5 -> registerB1
+            6 -> registerC1
+            else -> {
+                println("Invalid program!")
+                -1
+            }
+        }
+        when (program[instructionPointer]) {  // instruction is at current position
+            0 -> { // adv performs division. Numerator reg A and denominator 2^comboOperand and store in reg A
+                registerA1 /= (1 shl comboOperand)
+                instructionPointer += 2
+            }
+
+            1 -> { // bxl calculates the bitwise XOR of reg B and the literal operand and store in reg B
+                registerB1 = registerB1 xor literalOperand
+                instructionPointer += 2
+            }
+
+            2 -> { // bst calculates combo operand modulo 8 and stores it in reg B
+                registerB1 = comboOperand % 8
+                instructionPointer += 2
+            }
+
+            3 -> { // jnz does nothing if reg A is zero. Else it jumps by setting the instruction pointer
+                // to the value of the literal operand. Also, if we jump the instruction pointer is not incremented
+                if (registerA1 != 0) {
+                    instructionPointer = literalOperand
+                } else {
+                    instructionPointer += 2
+                }
+            }
+
+            4 -> { // bxc calculates the bitwise XOR of reg B and reg C and stores it in reg B
+                registerB1 = registerB1 xor registerC1
+                instructionPointer += 2
+
+            }
+
+            5 -> { // out calculates the values of the combo operand modulo 8 and outputs it (multiple outputs are seperated by commas)
+                output.add(comboOperand % 8)
+                instructionPointer += 2
+
+            }
+
+            6 -> {// bdv works like adv (read reg A) but stores the result in reg B
+                registerB1 = registerA1 / (1 shl comboOperand)
+                instructionPointer += 2
+            }
+
+            7 -> { // cdv works like adv (read reg A) but stores the result in reg C
+                registerC1 = registerA1 / (1 shl comboOperand)
+                instructionPointer += 2
+
             }
         }
     }
-    // find the end point
-    var end = Pair(0, 0)
-    grid.forEach { row ->
-        row.forEach {
-            if (it == 'E') {
-                end = Pair(row.indexOf(it), grid.indexOf(row))
-                grid[end.second][end.first] = '.'
-            }
-        }
-    }
-
-    val (bestScore, allBestPaths) = findAllBestPaths(grid, start, end)
-    
-    if (allBestPaths.isEmpty()) {
-        println("No valid paths found!")
-        return
-    }
-    
-    // Part 1: Print one of the best paths
-    val pathForDisplay = allBestPaths.first()
-    val gridCopy = grid.map { it.toMutableList() }.toMutableList()
-    pathForDisplay.forEach { (x, y) ->
-        gridCopy[y][x] = 'X'
-    }
-    
-    println("Part 1:")
-    gridCopy.forEach { row ->
-        row.forEach { print(it) }
-        println()
-    }
-    println("Shortest path length: $bestScore")
-
-    // Part 2: Mark all tiles that are part of any best path
-    val uniqueTiles = allBestPaths.flatten().toSet()
-    val gridCopy2 = grid.map { it.toMutableList() }.toMutableList()
-    uniqueTiles.forEach { (x, y) ->
-        gridCopy2[y][x] = 'O'
-    }
-
-    println("\nPart 2:")
-    gridCopy2.forEach { row ->
-        row.forEach { print(it) }
-        println()
-    }
-    println("Number of tiles in best paths: ${uniqueTiles.size}")
-}
-
-data class PathState(
-    val position: Pair<Int, Int>,
-    val direction: Direction,
-    val score: Int,
-    val path: List<Pair<Int, Int>>
-)
-
-enum class Direction {
-    UP, DOWN, LEFT, RIGHT
-}
-
-fun findAllBestPaths(
-    grid: List<List<Char>>,
-    start: Pair<Int, Int>,
-    end: Pair<Int, Int>
-): Pair<Int, List<List<Pair<Int, Int>>>> {
-    val bestScores = mutableMapOf<Triple<Int, Int, Direction>, Int>()
-    val queue = ArrayDeque<PathState>()
-    val completePaths = mutableListOf<PathState>()
-    
-    // Start from all directions
-    Direction.values().forEach { dir ->
-        queue.add(PathState(start, dir, 0, listOf(start)))
-    }
-    
-    while (queue.isNotEmpty()) {
-        val current = queue.removeFirst()
-        val (x, y) = current.position
-        val state = Triple(x, y, current.direction)
-        
-        // Skip if we've found a better path to this position+direction
-        val existingScore = bestScores[state]
-        if (existingScore != null && existingScore <= current.score) {
-            continue
-        }
-        bestScores[state] = current.score
-        
-        // Found end
-        if (current.position == end) {
-            completePaths.add(current)
-            continue
-        }
-        
-        // Try moving forward
-        val nextPos = when (current.direction) {
-            Direction.UP -> x to y - 1
-            Direction.DOWN -> x to y + 1
-            Direction.LEFT -> x - 1 to y
-            Direction.RIGHT -> x + 1 to y
-        }
-        
-        if (isValidMove(nextPos, grid) && nextPos !in current.path) {
-            queue.add(PathState(
-                nextPos,
-                current.direction,
-                current.score + 1,
-                current.path + nextPos
-            ))
-        }
-        
-        // Try rotations
-        listOf(rotateLeft(current.direction), rotateRight(current.direction)).forEach { newDir ->
-            queue.add(PathState(
-                current.position,
-                newDir,
-                current.score + 1000,
-                current.path
-            ))
-        }
-    }
-    
-    if (completePaths.isEmpty()) return Int.MAX_VALUE to emptyList()
-    
-    val bestScore = completePaths.minOf { it.score }
-    val bestPaths = completePaths
-        .filter { it.score == bestScore }
-        .map { it.path }
-    
-    return bestScore to bestPaths
-}
-
-fun rotateLeft(direction: Direction) = when (direction) {
-    Direction.UP -> Direction.LEFT
-    Direction.LEFT -> Direction.DOWN
-    Direction.DOWN -> Direction.RIGHT
-    Direction.RIGHT -> Direction.UP
-}
-
-fun rotateRight(direction: Direction) = when (direction) {
-    Direction.UP -> Direction.RIGHT
-    Direction.RIGHT -> Direction.DOWN
-    Direction.DOWN -> Direction.LEFT
-    Direction.LEFT -> Direction.UP
-}
-
-fun isValidMove(pos: Pair<Int, Int>, grid: List<List<Char>>): Boolean {
-    val (x, y) = pos
-    return y in grid.indices && x in grid[0].indices && grid[y][x] != '#'
+    return output
 }
